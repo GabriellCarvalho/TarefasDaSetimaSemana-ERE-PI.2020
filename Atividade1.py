@@ -1,121 +1,99 @@
 # -*- coding: utf-8 -*-
 
-import re
 import cv2
 from skimage import feature
 from sklearn.svm import SVC
 import numpy as np
 import pickle
 from tqdm import tqdm
+from os import listdir
+from os.path import isfile, join
 
-rootFolder = "INRIAPerson\\"
-trainFolder = "Train\\"
-testFolder = "Test\\"
-objFolder = "pos\\"
-bkgFolder = "neg\\"
-cropTrainFolder = "CropTrain\\"
-cropTestFolder = "CropTest\\"
 
-imagesListPos = "pos.lst"
-imagesListNeg = "neg.lst"
-annotationsList = "annotations.lst"
+rootFolder = "atv1\\"
+trainFolder = "treino\\"
+testFolder = "teste\\"
+obj1Folder = "carro\\"
+obj2Folder = "moto\\"
+obj3Folder = "onibus\\"
+
+cropTrainFolder = "train\\"
+cropTestFolder = "test\\"
+
 svmFilename = "obj.svm"
 
-widthWindow = 64
-heightWindow = 128
+widthWindow = 400
+heightWindow = 400
 
 orientationsParam = 9
-pixelsPerCellParam = 8
+pixelsPerCellParam = 4
 cellsPerBlockParam = 2
 
-def extractFilenamesFromFolder(path, file):
-    listFilenames = []
-    with open(path + file) as f:
-        listFilenames = [line.rstrip() for line in f]
-    return listFilenames
+def extractFilenamesFromFolder(path):
+    onlyfiles = [f for f in listdir(path) if isfile(join(path, f))]
+    return onlyfiles
 
-def cropRegionOfEachPosImage(path, folder, listOfImages, ListOfAnnotations, isTrain):
+def cropRegionOfEachPosImage(path, trainFolder, cropFolder, listOfImages, isTrain):
     i = 0
     if(isTrain == 1):
-        print("Montando base de imagens de pedestres para treino.")
-    else:
-        print("Montando base de imagens de pedestres para teste.")
+        print("Montando base de imagens de carro para treino.")
+    elif(isTrain == 2):
+        print("Montando base de imagens de moto para teste.")
+    elif(isTrain == 3):
+        print("Montando base de imagens de onibus para teste.")
 
-    for eachAnnotationFile in tqdm(ListOfAnnotations):
-        with open(path + eachAnnotationFile) as file:
-            data = file.readlines()
-        bboxLine = str(data[-2:])
-        m = re.search(r"\([0-9]+, [0-9]+\) - \([0-9]+, [0-9]+\)", bboxLine)
-        listOfNumbers = re.findall(r"\d+", m.group())
-        
-        xmin = int(listOfNumbers[0])
-        ymin = int(listOfNumbers[1])
-        xmax = int(listOfNumbers[2])
-        ymax = int(listOfNumbers[3])
-
-        #pra não ler as imagens flip do txt        
-        if listOfImages[i].find("flip") != -1:
-            continue
-
-        #nesse momento temos um vetor com xmin, ymin, xmax, ymax de cada imagem pos
-        img = cv2.imread(path + listOfImages[i])
-        img = img[ymin : ymax , xmin : xmax]
-        stringImg = listOfImages[i].split("/", 1)
-        cv2.imwrite(path + folder + stringImg[-1], img)
-
-        #flip image
+    for eachImage in tqdm(listOfImages):
         if(isTrain == 1):
-            flipImg = cv2.flip(img, 1)
-            cv2.imwrite(rootFolder + cropTrainFolder + objFolder + "flip_" + str(i) + ".png", flipImg)
-            #with open(rootFolder + trainFolder + imagesListPos, "a") as myfile:
-            #    myfile.write("\nTrain/pos/flip_" + str(i) + ".png")
-        else:
-            flipImg = cv2.flip(img, 1)
-            cv2.imwrite(rootFolder + cropTestFolder + objFolder + "flip_" + str(i) + ".png", flipImg)
-            #with open(rootFolder + testFolder + imagesListPos, "a") as myfile:
-            #    myfile.write("\nTest/pos/flip_" + str(i) + ".png")
+            img = cv2.imread(path + trainFolder + obj1Folder + eachImage)
+        elif(isTrain == 2):
+            img = cv2.imread(path + trainFolder + obj2Folder + eachImage)
+        elif(isTrain == 3):
+            img = cv2.imread(path + trainFolder + obj3Folder + eachImage)
+      
+        img = cv2.resize(img, (widthWindow, heightWindow))
+        flipImg = cv2.flip(img, 1)
+        
+        stringImg = listOfImages[i].split("/", 1)
+        
+        if(isTrain == 1):
+            cv2.imwrite(path + cropFolder + obj1Folder + stringImg[0], img)
+            cv2.imwrite(path + cropFolder + obj1Folder + "flip_" + str(i) + ".png", flipImg)
+        elif(isTrain == 2):
+            cv2.imwrite(path + cropFolder + obj2Folder + stringImg[0], img)
+            cv2.imwrite(path + cropFolder + obj2Folder + "flip_" + str(i) + ".png", flipImg)
+        elif(isTrain == 3):
+            cv2.imwrite(path + cropFolder + obj3Folder + stringImg[0], img)
+            cv2.imwrite(path + cropFolder + obj3Folder + "flip_" + str(i) + ".png", flipImg)
+       
+
         i += 1
 
-def cropRegionOfEachNegImage(path, folder, listOfImages, isTrain):
-    if(isTrain == 1):
-        print("Montando base de imagens de não pedestres para treino.")
-    else:
-        print("Montando base de imagens de não pedestres para teste.")
-    for eachImageFile in tqdm(listOfImages):
-        img = cv2.imread(path + eachImageFile)
-        img = img[0:heightWindow , 0:widthWindow]
-        stringImg = eachImageFile.split("/", -1)
-        cv2.imwrite(path + folder + bkgFolder + stringImg[2], img)
-    
 def setDatabase():
-    #train
-    vectorOfFilenameImagesPos = extractFilenamesFromFolder(rootFolder + trainFolder, imagesListPos)
-    vectorOfFilenameImagesNeg = extractFilenamesFromFolder(rootFolder + trainFolder, imagesListNeg)
-    vectorOfFilenameAnnotations = extractFilenamesFromFolder(rootFolder + trainFolder, annotationsList)
-    cropRegionOfEachPosImage(rootFolder, cropTrainFolder, vectorOfFilenameImagesPos, vectorOfFilenameAnnotations, 1)
-    cropRegionOfEachNegImage(rootFolder, cropTrainFolder, vectorOfFilenameImagesNeg, 1)
+    #train carro
+    vectorOfFilenameImagesPos = extractFilenamesFromFolder(rootFolder + trainFolder + obj1Folder)
+    cropRegionOfEachPosImage(rootFolder, trainFolder, cropTrainFolder, vectorOfFilenameImagesPos, 1)
 
-    vectorOfFilenameImagesPos = []
-    vectorOfFilenameImagesNeg = []
-    vectorOfFilenameAnnotations = []
+    #train moto
+    vectorOfFilenameImagesPos = extractFilenamesFromFolder(rootFolder + trainFolder + obj2Folder)
+    cropRegionOfEachPosImage(rootFolder, trainFolder, cropTrainFolder, vectorOfFilenameImagesPos, 2)
 
-    #test
-    vectorOfFilenameImagesPos = extractFilenamesFromFolder(rootFolder + testFolder, imagesListPos)
-    vectorOfFilenameImagesNeg = extractFilenamesFromFolder(rootFolder + testFolder, imagesListNeg)
-    vectorOfFilenameAnnotations = extractFilenamesFromFolder(rootFolder + testFolder, annotationsList)
-    cropRegionOfEachPosImage(rootFolder, cropTestFolder, vectorOfFilenameImagesPos, vectorOfFilenameAnnotations, 0)
-    cropRegionOfEachNegImage(rootFolder, cropTestFolder, vectorOfFilenameImagesNeg, 0)
+    #train onibus
+    vectorOfFilenameImagesPos = extractFilenamesFromFolder(rootFolder + trainFolder + obj3Folder)
+    cropRegionOfEachPosImage(rootFolder, trainFolder, cropTrainFolder, vectorOfFilenameImagesPos, 3)
+
+
+
 
 def trainSVM():
     X = np.empty(0)
     Y = np.empty(0)
     dimensionOfFeatureVector = 0
     
-    print("Extraindo feature HOG da base de pedestres.")
-    vectorOfFilenameImagesPos = extractFilenamesFromFolder(rootFolder + trainFolder, imagesListPos)
+    print("Extraindo feature HOG de carro.")
+    vectorOfFilenameImagesPos = extractFilenamesFromFolder(rootFolder + cropTrainFolder + obj1Folder)
     for eachImage in tqdm(vectorOfFilenameImagesPos):
         eachImage = eachImage.split("/", -1)
-        eachImage = rootFolder + cropTrainFolder + objFolder + eachImage[2]
+        eachImage = rootFolder + cropTrainFolder + obj1Folder + eachImage[0]
         
         img = cv2.imread(eachImage, 0)
         img = cv2.resize(img, (widthWindow, heightWindow))
@@ -129,96 +107,72 @@ def trainSVM():
             X = np.append(X, H)
             
         if(Y.shape[0] == 0):
-            Y = np.array([1])
+            Y = np.array([0])
         else:
-            Y = np.append(Y, np.array([1]))
+            Y = np.append(Y, np.array([0]))
              
-    print("Extraindo feature HOG da base de não pedestres.\n")
-    vectorOfFilenameImagesNeg = extractFilenamesFromFolder(rootFolder + trainFolder, imagesListNeg)
-    for eachImage in tqdm(vectorOfFilenameImagesNeg):
+    print("Extraindo feature HOG de moto.")
+    vectorOfFilenameImagesPos = extractFilenamesFromFolder(rootFolder + cropTrainFolder + obj2Folder)
+    for eachImage in tqdm(vectorOfFilenameImagesPos):
         eachImage = eachImage.split("/", -1)
-        eachImage = rootFolder + cropTrainFolder + bkgFolder + eachImage[2]
-
+        eachImage = rootFolder + cropTrainFolder + obj2Folder + eachImage[0]
+        
         img = cv2.imread(eachImage, 0)
-        img = img[0:heightWindow , 0:widthWindow]
+        img = cv2.resize(img, (widthWindow, heightWindow))
         H = feature.hog(img, orientations=orientationsParam, pixels_per_cell=(pixelsPerCellParam, pixelsPerCellParam), cells_per_block=(cellsPerBlockParam, cellsPerBlockParam), block_norm='L2-Hys', feature_vector = True)
         H = np.array(H)
         
-        X = np.append(X, H)
-        Y = np.append(Y, np.array([0]))
+        X = np.append(X, H)            
+        Y = np.append(Y, np.array([1]))
              
-
+    print("Extraindo feature HOG de onibus.")
+    vectorOfFilenameImagesPos = extractFilenamesFromFolder(rootFolder + cropTrainFolder + obj3Folder)
+    for eachImage in tqdm(vectorOfFilenameImagesPos):
+        eachImage = eachImage.split("/", -1)
+        eachImage = rootFolder + cropTrainFolder + obj3Folder + eachImage[0]
+        
+        img = cv2.imread(eachImage, 0)
+        img = cv2.resize(img, (widthWindow, heightWindow))
+        H = feature.hog(img, orientations=orientationsParam, pixels_per_cell=(pixelsPerCellParam, pixelsPerCellParam), cells_per_block=(cellsPerBlockParam, cellsPerBlockParam), block_norm='L2-Hys', feature_vector = True)
+        H = np.array(H)
+        
+        X = np.append(X, H)            
+        Y = np.append(Y, np.array([2]))
+        
     print("Treinando o SVM.\n")
     X = np.reshape(X, (-1, dimensionOfFeatureVector))
 
-    svm = SVC(C=1.0)
+    svm = SVC(kernel='linear')
     svm.fit(X, Y)
     return svm
 
 def testImages(svmObj):
-    acc = 0.0
-    total = 0.0
     font = cv2.FONT_HERSHEY_SIMPLEX
-    vectorOfFilenameImagesPos = extractFilenamesFromFolder("INRIAPerson\\Test\\", "pos.lst")
-    print("Classificando imagens de pedestres.")
+    vectorOfFilenameImagesPos = extractFilenamesFromFolder(rootFolder + testFolder)
+    print("Classificando imagens.")
     for eachImage in tqdm(vectorOfFilenameImagesPos):
         eachImage = eachImage.split("/", -1)
-        eachImage = rootFolder + cropTestFolder + objFolder + eachImage[2]
+        eachImage = rootFolder + testFolder + eachImage[0]
         
         img = cv2.imread(eachImage, 0)
         imgShow = cv2.imread(eachImage, 1)
-        imgShow = cv2.resize(imgShow, (400, 800))
         h, w, _ = imgShow.shape
-
         img = cv2.resize(img, (widthWindow, heightWindow))
+
         H = feature.hog(img, orientations=orientationsParam, pixels_per_cell=(pixelsPerCellParam, pixelsPerCellParam), cells_per_block=(cellsPerBlockParam, cellsPerBlockParam), block_norm='L2-Hys', feature_vector = True)
         X = np.array(H)
         X = np.reshape(X, (-1, X.shape[0]))
-
-        if(svmObj.predict(X) == 1):
-            cv2.putText(imgShow, 'Pedestre', (0, int(h * 0.05)), font, 1, (0, 0, 255), 3, cv2.LINE_AA)
-            acc+=1.0
-        else:
-            cv2.putText(imgShow, 'Nao Pedestre', (0, int(h * 0.05)), font, 1, (255, 0, 0), 3, cv2.LINE_AA)
-            #print(eachImage)
-
-        #cv2.imshow("Resultado", imgShow)
-        #cv2.waitKey(0)
-        #cv2.destroyAllWindows()
-        total += 1.0
-    print("Acurácia de Pedestres = " + str(acc / total))
-
-    acc = 0.0
-    vectorOfFilenameImagesNeg = extractFilenamesFromFolder("INRIAPerson\\Test\\", "neg.lst")
-    total = 0.0
-    print("Classificando imagens de não pedestres.")
-    for eachImage in tqdm(vectorOfFilenameImagesNeg):
-        eachImage = eachImage.split("/", -1)
-        eachImage = rootFolder + cropTestFolder + bkgFolder + eachImage[2]
         
-        img = cv2.imread(eachImage, 0)
-        imgShow = cv2.imread(eachImage, 1)
-        imgShow = cv2.resize(imgShow, (400, 800))
-        h, w, _ = imgShow.shape
-
-        img = cv2.resize(img, (widthWindow, heightWindow))
-        H = feature.hog(img, orientations=orientationsParam, pixels_per_cell=(pixelsPerCellParam, pixelsPerCellParam), cells_per_block=(cellsPerBlockParam, cellsPerBlockParam), block_norm='L2-Hys', feature_vector = True)
-        X = np.array(H)
-        X = np.reshape(X, (-1, X.shape[0]))
-
         if(svmObj.predict(X) == 0):
-            cv2.putText(imgShow, 'Nao Pedestre', (0, int(h * 0.05)), font, 1, (255, 0, 0), 3, cv2.LINE_AA)
-            acc+=1.0
-        else:
-            cv2.putText(imgShow, 'Pedestre', (0, int(h * 0.05)), font, 1, (0, 0, 255), 3, cv2.LINE_AA)
-            #print(eachImage)
-
-        #cv2.imshow("Resultado", imgShow)
-        #cv2.waitKey(0)
-        #cv2.destroyAllWindows()
-        total += 1.0
-
-    print("Acurácia de não pedestres = " + str(acc / total))
+            cv2.putText(imgShow, 'Carro', (0, int(h * 0.15)), font, 1, (0, 255, 0), 3, cv2.LINE_AA)
+        elif(svmObj.predict(X) == 1):
+            cv2.putText(imgShow, 'Moto', (0, int(h * 0.15)), font, 1, (0, 0, 255), 3, cv2.LINE_AA)
+        elif(svmObj.predict(X) == 2):
+            cv2.putText(imgShow, 'Onibus', (0, int(h * 0.15)), font, 1, (0, 255, 255), 3, cv2.LINE_AA)
+        
+        cv2.imshow("Resultado", imgShow)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
     
 def saveSVM(obj):
     pickle.dump(obj, open(svmFilename, "wb"))    
